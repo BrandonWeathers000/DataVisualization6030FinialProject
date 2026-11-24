@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      *{
+          color: white;
+          background-color: black;
+      }
+
+      #direction-chart{
+          height: 1000px;
+          width: 1100px;
+      }
+    </style>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+  </head>
+
+  <body>
+    <h1>Particular Cell Types and Their Populations</h1>
+    <!-- <h1>Polar Direction and Magnidue Tracker</h1> -->
+    <p>
+      This visulization represents the number of detected cells per field of view.
+      The higher end cap represents the highest value. The start of the box represents the 1st quartile. The center line represents the medium. The dot represents the mean. The end of the box represents the 3rd quartile. The lower end cap represents the lowest value.
+    </p>
+
+    <script src="boxAndWhisker.js"></script>
+    <div id="box-chart"></div>
+
+    <!-- <script src="directionTracker.js"></script> -->
+    <!-- <div id="direction-chart"></div> -->
+  </body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cell Track Anomaly Visualization</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    :root {
+      --ink: #20252b;
+      --muted: #68727d;
+      --teal: #20b99d;
+      --grid: #e8edf0;
+      --paper: #ffffff;
+      --panel: #f8fafb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 36px 24px 56px;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { max-width: 1180px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font-size: clamp(1.7rem, 3vw, 2.35rem); font-weight: 650; }
+    .intro { color: var(--muted); line-height: 1.6; margin: 0 0 28px; max-width: 850px; }
+    .controls {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) auto;
+      align-items: center;
+      gap: 18px;
+      padding: 18px 20px;
+      border: 1px solid #e4e9ec;
+      border-radius: 12px;
+      background: var(--panel);
+      margin-bottom: 22px;
+    }
+    .slider-wrap { min-width: 0; }
+    .slider-heading { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .slider-heading label { font-weight: 650; }
+    #frame-value { font-variant-numeric: tabular-nums; color: #078c78; font-weight: 700; }
+    input[type="range"] { width: 100%; accent-color: var(--teal); cursor: pointer; }
+    .frame-buttons { display: flex; gap: 8px; }
+    button {
+      border: 1px solid #d7dfe3; border-radius: 8px; padding: 9px 13px;
+      background: white; color: var(--ink); cursor: pointer; font: inherit;
+    }
+    button:hover { background: #edf8f5; border-color: var(--teal); }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .summary {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px;
+    }
+    .summary-card {
+      padding: 14px 16px; border: 1px solid #e4e9ec; border-radius: 10px;
+      background: white;
+    }
+    .summary-card span { display: block; color: var(--muted); font-size: .82rem; margin-bottom: 5px; }
+    .summary-card strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+    .chart-panel {
+      border: 1px solid #e4e9ec; border-radius: 12px; padding: 18px 18px 10px;
+      margin: 16px 0; overflow: hidden;
+    }
+    .chart-panel h2 { font-size: 1.08rem; margin: 0 0 2px; }
+    .chart-panel p { color: var(--muted); font-size: .86rem; margin: 0 0 8px; }
+    .chart { width: 100%; display: block; overflow: visible; }
+    .axis text { fill: #68727d; font-size: 11px; }
+    .axis path, .axis line { stroke: #cbd4d9; }
+    .grid line { stroke: var(--grid); }
+    .grid path { display: none; }
+    .box { fill: #e9f5f2; stroke: var(--teal); stroke-width: 1.6; }
+    .median { stroke: #27343a; stroke-width: 2; }
+    .whisker, .cap { stroke: var(--teal); stroke-width: 2; }
+    .outlier { stroke: white; stroke-width: 1.1; cursor: pointer; }
+    .outlier:hover { stroke: #17252b; stroke-width: 2; }
+    .legend-note { color: var(--muted); font-size: .83rem; margin: 16px 2px 0; }
+    .tooltip {
+      position: fixed; z-index: 10; pointer-events: none; opacity: 0;
+      padding: 8px 10px; border-radius: 7px; color: white; background: #202a30;
+      font-size: 12px; line-height: 1.45; box-shadow: 0 4px 16px #0002;
+    }
+    .error { padding: 14px; border-radius: 8px; background: #fff1f0; color: #a1261c; }
+    @media (max-width: 650px) {
+      body { padding: 22px 12px 40px; }
+      .controls { grid-template-columns: 1fr; }
+      .frame-buttons { justify-content: flex-end; }
+      .summary { grid-template-columns: 1fr; }
+      .chart-panel { padding: 12px 8px 6px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Cell Track Anomaly Visualization</h1>
+  <p class="intro">
+    Explore how track-level measurements change over time. Move the slider to select a frame;
+    every statistic is recalculated using CSV records from that frame and all preceding frames.
+    Colored points identify tracks outside the 1.5 × IQR fences.
+  </p>
+
+  <section class="controls" aria-label="Frame controls">
+    <div class="slider-wrap">
+      <div class="slider-heading">
+        <label for="frame-slider">Selected frame</label>
+        <output id="frame-value" for="frame-slider">0</output>
+      </div>
+      <input id="frame-slider" type="range" min="0" max="229" value="0" step="1" />
+    </div>
+    <div class="frame-buttons">
+      <button id="previous-frame" type="button" aria-label="Previous frame">← Previous</button>
+      <button id="next-frame" type="button">Next →</button>
+    </div>
+  </section>
+
+  <section class="summary" aria-live="polite">
+    <div class="summary-card"><span>Tracks observed</span><strong id="track-count">—</strong></div>
+    <div class="summary-card"><span>Total division events</span><strong id="division-count">—</strong></div>
+    <div class="summary-card"><span>Outlier observations</span><strong id="outlier-count">—</strong></div>
+  </section>
+
+  <section class="chart-panel">
+    <h2>Duration</h2>
+    <p>Unique frames observed per track (frames)</p>
+    <svg id="duration-chart" class="chart" role="img" aria-label="Duration box plot"></svg>
+  </section>
+  <section class="chart-panel">
+    <h2>Number of splits</h2>
+    <p>Division events per track through the selected frame</p>
+    <svg id="splits-chart" class="chart" role="img" aria-label="Number of splits box plot"></svg>
+  </section>
+  <section class="chart-panel">
+    <h2>Change in position</h2>
+    <p>Cumulative displacement per track through the selected frame</p>
+    <svg id="position-chart" class="chart" role="img" aria-label="Change in position box plot"></svg>
+  </section>
+
+  <p class="legend-note">
+    The box spans Q1–Q3, the center line is the median, and whiskers extend to the most
+    extreme observed values within 1.5 × IQR. Only values beyond those fences are drawn as dots.
+    Hover over a dot to see its track ID and value. Colors are assigned consistently by track ID.
+  </p>
+  <div id="error-message" role="alert"></div>
+</main>
+<div id="tooltip" class="tooltip"></div>
+<script type="module" src="visualization.js"></script>
+</body>
+</html>
